@@ -59,8 +59,8 @@ git push -u origin main
    - Publish directory: `dist`
 4. Add environment variables under **Site Settings → Environment Variables**:
    ```
-   VITE_SUPABASE_URL     = https://xxxx.supabase.co
-   VITE_SUPABASE_ANON_KEY = eyJhbGci...
+   TATVA_SUPABASE_URL              = https://xxxx.supabase.co
+   TATVA_SUPABASE_PUBLISHABLE_KEY  = sb_publishable_...
    ```
 5. **Deploy site** — takes ~60 seconds
 6. Your app is live at `https://random-name.netlify.app`
@@ -75,8 +75,8 @@ Steps 1-4 are identical to Netlify above.
 5. Go to [vercel.com/new](https://vercel.com/new) → **Import Git Repository**
 6. Select your repo — Vercel auto-detects Vite
 7. Add env vars:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+   - `TATVA_SUPABASE_URL`
+   - `TATVA_SUPABASE_PUBLISHABLE_KEY`
 8. **Deploy** — live in ~30 seconds
 
 ---

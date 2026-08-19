@@ -1,14 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY;
+export async function createSb() {
+  const res = await fetch('/api/supabase-config');
+  const cfg = res.ok ? await res.json() : {};
+  const url = cfg.url || '';
+  const key = cfg.key || '';
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error(
-    '⚠ Supabase env vars missing.\n' +
-    'Copy .env.example → .env and fill in your project URL + anon key.\n' +
-    'Get them from: https://supabase.com/dashboard/project/_/settings/api'
-  );
+  if (!url || !key) {
+    console.error(
+      'Supabase config missing.\n' +
+      'Set TATVA_SUPABASE_URL and TATVA_SUPABASE_PUBLISHABLE_KEY in .env (local) or Vercel env vars (production).'
+    );
+  }
+
+  return createClient(url, key);
 }
-
-export const sb = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');

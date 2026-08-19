@@ -1,18 +1,15 @@
 /**
  * Project 800 – Main Entry Point
- * Initialises Supabase client and exposes it as window._sb
- * Then loads app.js (which contains all UI logic)
+ * Loads Supabase config from the server, then exposes the client as window._sb
  */
-import { sb } from './lib/supabase.js';
+import { createSb } from './lib/supabase.js';
 import './styles/app.css';
 
-// Expose globally so app.js inline functions can reach Supabase
-window._sb = sb;
+window._sb = await createSb();
+window.dispatchEvent(new Event('sb-ready'));
 
-// Listen for auth state changes (e.g. session expiry)
-sb.auth.onAuthStateChange((event) => {
+window._sb.auth.onAuthStateChange((event) => {
   if (event === 'SIGNED_OUT') {
-    // Reset UI if session expires externally
     const loginScreen = document.getElementById('login-screen');
     const appEl       = document.getElementById('app');
     const footer      = document.getElementById('app-footer');

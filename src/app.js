@@ -2245,6 +2245,9 @@ document.addEventListener('keydown',e=>{
 });
 // Async startup: check Supabase session before rendering
 (async()=>{
+  if(!window._sb){
+    await new Promise(r=>window.addEventListener('sb-ready',r,{once:true}));
+  }
   if(await checkSession()) showApp();
   else document.getElementById('login-screen').classList.remove('hidden');
 })();
