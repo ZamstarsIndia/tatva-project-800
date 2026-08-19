@@ -1,7 +1,14 @@
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { defineConfig, loadEnv } from 'vite';
+import usersHandler from './api/users.js';
 
-function supabaseConfigPlugin(env) {
+function asConnect(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res)).catch(next);
+  };
+}
+
+function supabaseApiPlugin(env) {
   const payload = JSON.stringify({
     url: env.TATVA_SUPABASE_URL || '',
     key: env.TATVA_SUPABASE_PUBLISHABLE_KEY || '',
@@ -14,13 +21,26 @@ function supabaseConfigPlugin(env) {
     res.end(payload);
   }
 
+  const serveUsers = (req, res, next) => {
+    if (req.url?.split('?')[0] !== '/api/users') return next();
+    return asConnect(usersHandler)(req, res, next);
+  };
+
   return {
-    name: 'supabase-config',
+    name: 'supabase-api',
     configureServer(server) {
+      Object.assign(process.env, {
+        TATVA_SUPABASE_URL: env.TATVA_SUPABASE_URL || '',
+        TATVA_SUPABASE_PUBLISHABLE_KEY: env.TATVA_SUPABASE_PUBLISHABLE_KEY || '',
+        TATVA_SUPABASE_SECRET_KEY: env.TATVA_SUPABASE_SECRET_KEY || '',
+        TATVA_SUPABASE_SERVICE_ROLE_KEY: env.TATVA_SUPABASE_SERVICE_ROLE_KEY || '',
+      });
       server.middlewares.use(serveConfig);
+      server.middlewares.use(serveUsers);
     },
     configurePreviewServer(server) {
       server.middlewares.use(serveConfig);
+      server.middlewares.use(serveUsers);
     },
     closeBundle() {
       mkdirSync('dist/src', { recursive: true });
@@ -32,7 +52,7 @@ function supabaseConfigPlugin(env) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
-    plugins: [supabaseConfigPlugin(env)],
+    plugins: [supabaseApiPlugin(env)],
     build: {
       outDir: 'dist',
       assetsDir: 'assets',

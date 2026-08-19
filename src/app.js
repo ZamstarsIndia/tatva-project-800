@@ -33,8 +33,7 @@ const ROLE_PERMS={
 function can(p){ return CURRENT_USER?(ROLE_PERMS[CURRENT_USER.role]||[]).includes(p):false; }
 
 // ── USERS ──────────────────────────────────────────
-function getUsers(){ return []; } // stub – users live in Supabase Auth
-function saveUsers(u){ /* users saved via Supabase Admin API */ }
+function getUsers(){ return S?.users||[]; }
 
 // ── AUTH ───────────────────────────────────────────
 async function doLogin(){
@@ -75,6 +74,34 @@ async function doLogout(){
   document.getElementById('l-password').value='';
   document.getElementById('l-error').textContent='';
 }
+function openChangePasswordModal(){
+  if(!CURRENT_USER?.email){showToast('Not signed in','err');return;}
+  document.getElementById('modal-title').textContent='Change Password';
+  document.getElementById('modal-tabs').classList.add('hidden');
+  const saveBtn=document.getElementById('modal-save-btn');
+  saveBtn.classList.remove('hidden');
+  saveBtn.textContent='Update Password';
+  document.getElementById('modal-body').innerHTML=`<div class="crm-overview-grid">
+    <div class="field-wrap req" style="grid-column:1/-1"><label>Current password</label><input id="pw-current" type="password" autocomplete="current-password"></div>
+    <div class="field-wrap req"><label>New password</label><input id="pw-new" type="password" autocomplete="new-password"></div>
+    <div class="field-wrap req"><label>Confirm new password</label><input id="pw-confirm" type="password" autocomplete="new-password"></div>
+  </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+  modalSaveCallback=async()=>{
+    const current=document.getElementById('pw-current').value;
+    const next=document.getElementById('pw-new').value;
+    const confirm=document.getElementById('pw-confirm').value;
+    if(!current||!next||!confirm){showToast('All fields required','err');return;}
+    if(next.length<6){showToast('New password must be at least 6 characters','err');return;}
+    if(next!==confirm){showToast('New passwords do not match','err');return;}
+    if(next===current){showToast('New password must be different','err');return;}
+    const {error:authErr}=await window._sb.auth.signInWithPassword({email:CURRENT_USER.email,password:current});
+    if(authErr){showToast('Current password is incorrect','err');return;}
+    const {error}=await window._sb.auth.updateUser({password:next});
+    if(error){showToast(error.message,'err');return;}
+    closeModal();showToast('Password updated','ok');
+  };
+}
 async function checkSession(){
   try{
     const {data:{session}}=await window._sb.auth.getSession();
@@ -108,9 +135,10 @@ function applyPermissions(){
 async function init(){
   document.getElementById('save-badge').textContent='⏳ Loading…';
   try{
-    const [{data:acts,error:aErr},{data:settings}]=await Promise.all([
+    const [{data:acts,error:aErr},{data:settings},{data:profiles}]=await Promise.all([
       window._sb.from('activities').select('*,sub_tasks(*),moms(*),assets(*)').order('no'),
-      window._sb.from('app_settings').select('*')
+      window._sb.from('app_settings').select('*'),
+      window._sb.from('profiles').select('*')
     ]);
     if(aErr) throw aErr;
 
@@ -141,7 +169,8 @@ async function init(){
         assets:(a.assets||[]).map(as=>({id:as.local_id,name:as.name||'',url:as.url||'',type:as.type||'',addedDate:as.added_date||''}))
       })),
       nextId: Math.max(...(acts||[]).map(a=>a.id),999)+1,
-      monthOutcomes:{}
+      monthOutcomes:{},
+      users: mapProfiles(profiles)
     };
 
     // ── Trim monthOutcomes to valid indices
@@ -151,7 +180,7 @@ async function init(){
   }catch(e){
     console.error('Supabase load error:',e);
     showToast('Error loading data: '+e.message,'err');
-    S={masterBudget:12000000,admissions:0,targetAdmissions:800,lovs:JSON.parse(JSON.stringify(DEFAULT_LOVS)),activities:[],nextId:1000,monthOutcomes:{}};
+    S={masterBudget:12000000,admissions:0,targetAdmissions:800,lovs:JSON.parse(JSON.stringify(DEFAULT_LOVS)),activities:[],nextId:1000,monthOutcomes:{},users:[]};
   }
 
   document.getElementById('master-budget-input').value=fmtBare(S.masterBudget);
@@ -866,6 +895,7 @@ function openEditModal(id){
 function closeModal(){
   document.getElementById('modal-overlay').classList.remove('open');
   document.getElementById('modal-box').classList.remove('drive-expanded');
+  document.getElementById('modal-save-btn').textContent='Save Changes';
   modalSaveCallback=null;
 }
 document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
@@ -1516,8 +1546,24 @@ function renderBudget(){
 }
 
 // ── SETTINGS ───────────────────────────────────────
-function renderSettings(){
+function mapProfiles(rows){
+  return (rows||[]).map(p=>({
+    id:p.id,
+    name:p.name||'',
+    role:p.role||'editor',
+    email:p.email||(p.id===CURRENT_USER?.id?(CURRENT_USER.email||''):'')
+  }));
+}
+async function loadUsers(){
+  if(!window._sb){S.users=S.users||[];return;}
+  const {data,error}=await window._sb.from('profiles').select('*');
+  if(error){console.error('profiles load error:',error);S.users=S.users||[];return;}
+  S.users=mapProfiles(data);
+}
+async function renderSettings(){
   const g=document.getElementById('settings-grid');
+  if(!g)return;
+  if(can('manageUsers')) await loadUsers();
   if(!can('manageLovs')&&!can('manageUsers')){
     g.innerHTML=`<div class="access-denied"><div class="icon">🔒</div><h3 style="font-family:var(--fh);color:var(--t);margin-bottom:8px">Access Restricted</h3><p>Only Admin users can manage settings.</p></div>`;return;
   }
@@ -1537,12 +1583,12 @@ function renderSettings(){
       </div>`).join('');
   }
   if(can('manageUsers')){
-    html+=`<div class="lov-section" style="grid-column:1/-1">
+    html+=`<div class="lov-section lov-span">
       <div class="sec-hdr"><h3>👤 User Management</h3><button class="btn-sm btn-pri" onclick="openAddUserModal()">+ Add User</button></div>
       <div id="user-list">${renderUserList()}</div></div>`;
   }
   if(can('admin')){
-    html+=`<div class="lov-section" style="grid-column:1/-1;border:2px solid var(--coral);background:var(--coral3)">
+    html+=`<div class="lov-section lov-span" style="border:2px solid var(--coral);background:var(--coral3)">
       <div class="sec-hdr"><h3 style="color:var(--coral)">⚠️ Data Management</h3></div>
       <p style="font-size:12px;color:var(--mid);margin-bottom:12px">Reset reloads all activity data from the master Excel seed (budgets, months, spend data will be wiped). Useful after re-importing updated Excel data.</p>
       <button class="btn-sm" style="background:var(--coral);color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-weight:600"
@@ -1552,28 +1598,52 @@ function renderSettings(){
   g.innerHTML=html;
 }
 function renderUserList(){
-  const rcls={admin:'rb-admin',master:'rb-master',editor:'rb-editor'};
-  return getUsers().map(u=>`
+  const rcls={admin:'rb-admin',master:'rb-master',editor:'rb-editor',viewer:'rb-editor'};
+  const users=getUsers();
+  if(!users.length){
+    return `<p class="user-empty">No users yet. Use + Add User to create a login.</p>`;
+  }
+  return users.map(u=>`
     <div class="user-card">
-      <div class="user-avatar">${(u.name||'?').charAt(0).toUpperCase()}</div>
-      <div class="user-info-block"><div class="u-n">${esc(u.name)}${u.id===CURRENT_USER?.id?' <span style="font-size:10px;color:var(--mid)">(you)</span>':''}</div><div class="u-e">${esc(u.email)}</div></div>
-      <span class="role-badge ${rcls[u.role]||'rb-editor'}">${u.role}</span>
+      <div class="user-avatar">${esc((u.name||u.email||'?').charAt(0).toUpperCase())}</div>
+      <div class="user-info-block"><div class="u-n">${esc(u.name||'Unnamed')}${u.id===CURRENT_USER?.id?' <span style="font-size:10px;color:var(--mid)">(you)</span>':''}</div><div class="u-e">${esc(u.email||'—')}</div></div>
+      <span class="role-badge ${rcls[u.role]||'rb-editor'}">${esc(u.role)}</span>
       ${u.id!==CURRENT_USER?.id?`
-        <select class="btn-sm btn-ghost" onchange="changeUserRole(${u.id},this.value)" style="cursor:pointer">
-          ${['admin','master','editor'].map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('')}
+        <select class="btn-sm btn-ghost" onchange="changeUserRole('${u.id}',this.value)" style="cursor:pointer">
+          ${['admin','master','editor','viewer'].map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('')}
         </select>
-        <button class="btn-sm btn-coral" onclick="deleteUser(${u.id})">Delete</button>
+        <button class="btn-sm btn-coral" onclick="deleteUser('${u.id}')">Delete</button>
       `:'<span style="font-size:11px;color:var(--mid);padding:4px 8px">Current user</span>'}
     </div>`).join('');
 }
-function changeUserRole(uid,role){
-  const users=getUsers(),u=users.find(x=>x.id===uid);if(!u)return;
-  u.role=role;saveUsers(users);renderSettings();showToast('Role updated','ok');
+async function adminUserRequest(method, body){
+  const {data:{session}}=await window._sb.auth.getSession();
+  if(!session) throw new Error('Not signed in');
+  const res=await fetch('/api/users',{
+    method,
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+    body:body?JSON.stringify(body):undefined
+  });
+  const json=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(json.error||('Request failed ('+res.status+')'));
+  return json;
 }
-function deleteUser(uid){
+async function changeUserRole(uid,role){
+  if(!can('manageUsers')){showToast('No permission','err');return;}
+  try{
+    await adminUserRequest('PATCH',{id:uid,role});
+    const u=getUsers().find(x=>x.id===uid);if(u)u.role=role;
+    renderSettings();showToast('Role updated','ok');
+  }catch(e){showToast(e.message,'err');}
+}
+async function deleteUser(uid){
+  if(!can('manageUsers')){showToast('No permission','err');return;}
   if(uid===CURRENT_USER?.id){showToast('Cannot delete yourself','err');return;}
-  if(!confirm('Delete this user?'))return;
-  saveUsers(getUsers().filter(u=>u.id!==uid));renderSettings();showToast('User deleted');
+  if(!confirm('Delete this user? They will no longer be able to sign in.'))return;
+  try{
+    await adminUserRequest('DELETE',{id:uid});
+    renderSettings();showToast('User deleted','ok');
+  }catch(e){showToast(e.message,'err');}
 }
 function openAddUserModal(){
   document.getElementById('modal-title').textContent='Add User';
@@ -1581,25 +1651,26 @@ function openAddUserModal(){
   document.getElementById('modal-save-btn').classList.remove('hidden');
   document.getElementById('modal-body').innerHTML=`<div class="crm-overview-grid">
     <div class="field-wrap req"><label>Full Name</label><input id="nu-name" placeholder="Jane Doe"></div>
-    <div class="field-wrap req"><label>Email</label><input id="nu-email" type="email" placeholder="jane@tatva.edu"></div>
+    <div class="field-wrap req"><label>Email</label><input id="nu-email" type="email" placeholder="jane@zamstars.com"></div>
     <div class="field-wrap req"><label>Password</label><input id="nu-pass" type="password" placeholder="Min 6 chars"></div>
     <div class="field-wrap"><label>Role</label><select id="nu-role">
       <option value="editor">Editor — edit activity details</option>
       <option value="master">Master — also manage budgets</option>
       <option value="admin">Admin — full access</option>
+      <option value="viewer">Viewer — read only</option>
     </select></div></div>`;
   document.getElementById('modal-overlay').classList.add('open');
-  modalSaveCallback=()=>{
+  modalSaveCallback=async()=>{
     const name=document.getElementById('nu-name').value.trim();
     const email=document.getElementById('nu-email').value.trim().toLowerCase();
     const pass=document.getElementById('nu-pass').value;
     const role=document.getElementById('nu-role').value;
     if(!name||!email||!pass){showToast('All fields required','err');return;}
     if(pass.length<6){showToast('Password min 6 chars','err');return;}
-    const users=getUsers();
-    if(users.find(u=>u.email===email)){showToast('Email already exists','err');return;}
-    users.push({id:Math.max(...users.map(u=>u.id),0)+1,email,name,password:pass,role,createdAt:new Date().toISOString().split('T')[0]});
-    saveUsers(users);closeModal();renderSettings();showToast('User created: '+name,'ok');
+    try{
+      await adminUserRequest('POST',{name,email,password:pass,role});
+      closeModal();renderSettings();showToast('User created: '+name,'ok');
+    }catch(e){showToast(e.message,'err');}
   };
 }
 function addLov(key){
