@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Project 800 – Tatva Global School</title>
+
+<!-- CDN dependencies (loaded before our module so globals are available) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- Vite entry: Supabase init + CSS -->
+<script type="module" src="/src/main.js"></script>
+<!-- App logic (non-module, uses globals; loaded after CDN scripts) -->
+<script defer src="/src/app.js"></script>
+</head>
+<body>
+
+<!-- ══ LOGIN ═════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><img src="__LOGO__" alt="Tatva Global School"></div>
+    <h2>Project 800</h2>
+    <p class="sub">Marketing Tracker · Aug 2026 – Jun 2027</p>
+    <div class="l-field">
+      <label>Email Address</label>
+      <input type="email" id="l-email" placeholder="you@zamstars.com" autocomplete="email">
+    </div>
+    <div class="l-field">
+      <label>Password</label>
+      <input type="password" id="l-password" placeholder="••••••••" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div id="l-error"></div>
+    <button id="btn-login" onclick="doLogin()">Sign In →</button>
+    <div class="login-contact hidden" id="login-contact">
+      Don't have an account? <strong>Contact your Admin</strong> to get access.
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ═══════════════════════════════════ -->
+<div id="app" class="hidden">
+
+<div id="topbar">
+  <div class="logo-pill"><img src="__LOGO__" alt="Tatva Global School" height="46"></div>
+  <div class="titles">
+    <h1>Project 800 — Marketing Tracker</h1>
+    <div class="sub">Aug 2026 – Jun 2027 · ₹1.2 Crore</div>
+  </div>
+  <div id="save-badge">● Auto-saved</div>
+  <div id="user-pill">
+    <div class="u-name" id="u-name">—</div>
+    <div class="u-role" id="u-role">—</div>
+  </div>
+  <button id="btn-logout" onclick="doLogout()">Sign Out</button>
+</div>
+
+<div id="bbar">
+  <div id="budget-ctrl">
+    <label>Total Budget ₹</label>
+    <input type="text" id="master-budget-input" value="1,20,00,000">
+    <button id="btn-redist" onclick="redistributeBudget()">⇄ Redistribute</button>
+  </div>
+  <div class="bstat-box blue"><div class="lbl">Allocated</div><div class="val" id="stat-alloc">—</div></div>
+  <div class="bstat-box green"><div class="lbl">Remaining</div><div class="val" id="stat-rem">—</div></div>
+  <div class="bstat-box amber"><div class="lbl">Activities</div><div class="val" id="stat-acts">—</div></div>
+  <div class="bstat-box coral"><div class="lbl">Active Now</div><div class="val" id="stat-active">—</div></div>
+  <div id="bbar-actions">
+    <button id="btn-add-act" class="btn-sm btn-grn" onclick="openAddModal()">+ Add</button>
+    <button class="btn-sm btn-amb" onclick="saveState();showToast('Saved!','ok')">💾 Save</button>
+  </div>
+</div>
+
+<div id="nav">
+  <button class="nav-btn active" onclick="switchPanel('tracker',this)">📋 Tracker</button>
+  <button class="nav-btn" onclick="switchPanel('dashboard',this)">📊 Dashboard</button>
+  <button class="nav-btn" onclick="switchPanel('budget',this)">💰 Budget</button>
+  <button class="nav-btn grn" onclick="switchPanel('calview',this)">📅 Calendar View</button>
+  <button class="nav-btn grn" onclick="switchPanel('owners',this)">👥 Owner's View</button>
+  <button class="nav-btn" onclick="switchPanel('taskview',this)">📋 Task View</button>
+  <button class="nav-btn" onclick="switchPanel('budgetmgr',this)">💼 Budget Manager</button>
+  <button class="nav-btn" id="nav-settings" onclick="switchPanel('settings',this)">⚙️ Settings</button>
+</div>
+
+<!-- TRACKER -->
+<div class="panel active" id="panel-tracker">
+  <div class="filter-bar">
+    <span class="f-lbl">Filter:</span>
+    <input type="text" class="f-search" id="f-search" placeholder="Search…" oninput="renderTable()">
+    <select id="f-owner" onchange="renderTable()"><option value="">All Owners</option></select>
+    <select id="f-type" onchange="renderTable()"><option value="">All Types</option></select>
+    <select id="f-bucket" onchange="renderTable()"><option value="">All Buckets</option></select>
+    <select id="f-status" onchange="renderTable()"><option value="">All Statuses</option><option>Active</option><option>Planned</option><option>Done</option><option>Paused</option></select>
+    <select id="f-need" onchange="renderTable()"><option value="">Need</option><option>Must</option><option>Explore</option></select>
+    <button class="btn-sm btn-ghost" onclick="clearFilters()">✕ Clear</button>
+    <button class="btn-sm btn-export" onclick="exportTrackerExcel()" title="Download full tracker as Excel">⬇ Export Excel</button>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th style="width:36px">#</th>
+      <th class="sortable" onclick="clickSort('name')" style="min-width:200px">Activity <span class="sort-icon">↕</span></th>
+      <th style="width:60px">Need</th>
+      <th class="sortable" onclick="clickSort('type')" style="width:110px">Type <span class="sort-icon">↕</span></th>
+      <th style="width:110px">Channel</th>
+      <th style="width:80px">Paid/Org</th>
+      <th style="width:130px">Execution</th>
+      <th class="sortable" onclick="clickSort('owner')" style="width:110px">Owner <span class="sort-icon">↕</span></th>
+      <th class="sortable" onclick="clickSort('budget')" style="width:100px">Budget ₹ <span class="sort-icon">↕</span></th>
+      <th style="width:228px">Aug–Jun</th>
+      <th class="sortable" onclick="clickSort('status')" style="width:95px">Status <span class="sort-icon">↕</span></th>
+      <th style="min-width:110px">Notes</th>
+      <th style="width:65px">Act</th>
+    </tr></thead>
+    <tbody id="tbl-body"></tbody>
+  </table></div>
+  <div style="margin-top:8px;font-size:11px;color:var(--mid)" id="row-count"></div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="panel" id="panel-dashboard">
+  <div class="dash-tabs">
+    <button class="dt active" onclick="switchDashTab('overview',this)">📊 Overview</button>
+    <button class="dt" onclick="switchDashTab('tasks',this)">📋 By Task</button>
+    <button class="dt" onclick="switchDashTab('type',this)">🏷️ By Type</button>
+    <button class="dt" onclick="switchDashTab('channel',this)">📡 By Channel</button>
+    <button class="dt" onclick="switchDashTab('owner',this)">👤 By Owner</button>
+  </div>
+  <div id="dash-content">
+  <div id="overview-pane">
+
+  <!-- Hero: Goal tracker -->
+  <div class="dash-hero">
+    <div class="dash-hero-top">
+      <div style="flex:1">
+        <div class="hero-sub">Project 800 · Aug 2026 – Jun 2027</div>
+        <h2>🎯 Admission Goal Tracker</h2>
+        <p style="font-size:12px;color:rgba(255,255,255,.7);margin-top:4px">Measuring effectiveness of every rupee spent towards 800 admissions</p>
+      </div>
+      <div class="adm-ctrl">
+        <label>Admissions Secured</label>
+        <input class="adm-input" id="adm-input" type="number" min="0" max="800" placeholder="0"
+               oninput="saveAdmissions(this.value)" onchange="saveAdmissions(this.value)">
+        <span class="adm-of">/ 800</span>
+      </div>
+    </div>
+    <div class="adm-bar-wrap">
+      <div class="adm-bar-label">
+        <span id="adm-bar-left">0 admissions secured</span>
+        <span id="adm-bar-right">800 target</span>
+      </div>
+      <div class="adm-bar-track"><div class="adm-bar-fill" id="adm-bar-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <!-- Activity status breakdown -->
+  <div class="status-row" id="status-row"></div>
+
+  <!-- Monthly distribution + Activity progress side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <div class="card">
+      <h3>📅 Monthly Activity Distribution</h3>
+      <div class="month-grid-dash" id="month-grid-dash"></div>
+    </div>
+    <div class="card">
+      <h3>📋 Activity Progress (Top Active)</h3>
+      <div class="act-progress-list" id="act-progress-list"></div>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="dash-grid">
+    <div class="card"><h3>Budget by Type</h3><div style="height:200px"><canvas id="ch-type"></canvas></div></div>
+    <div class="card"><h3>Budget by Main Bucket</h3><div style="height:200px"><canvas id="ch-bucket"></canvas></div></div>
+    <div class="card"><h3>Activities by Owner</h3><div style="height:200px"><canvas id="ch-owner"></canvas></div></div>
+    <div class="card full"><h3>Paid vs Organic · Budget Allocation</h3><div style="height:160px"><canvas id="ch-paid"></canvas></div></div>
+  </div>
+
+  </div><!-- #overview-pane -->
+  <div id="sub-pane" style="display:none"></div>
+  </div><!-- #dash-content -->
+</div>
+
+<!-- BUDGET -->
+<div class="panel" id="panel-budget">
+  <div id="bud-cards" class="bud-grid"></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>#</th><th>Activity</th><th>Type</th><th>Owner</th><th>Last Yr ₹</th><th>Budget ₹</th><th>Notes</th></tr></thead>
+    <tbody id="bud-body"></tbody>
+  </table></div>
+</div>
+
+<!-- CALENDAR VIEW -->
+<div class="panel" id="panel-calview">
+  <div id="cv-topbar">
+    <h2>📅 Calendar View</h2>
+    <button id="btn-autoalloc" class="btn-sm" onclick="autoAllocateAll()" title="Split each activity's budget equally across its active months">⚡ Auto-Allocate</button>
+  </div>
+  <!-- 12-month card grid -->
+  <div id="cv-grid"></div>
+  <!-- Task detail (shown on card click) -->
+  <div id="cv-task-detail" style="display:none"></div>
+</div>
+
+<!-- OWNER'S VIEW -->
+<div class="panel" id="panel-owners">
+  <div class="owner-header">
+    <h2>👥 Owner's View</h2>
+    <div class="owner-tabs" id="owner-tabs"></div>
+  </div>
+  <div class="ov-stats" id="ov-stats"></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th style="width:36px">#</th>
+      <th style="min-width:220px">Activity</th>
+      <th style="width:110px">Type</th>
+      <th style="width:130px">Execution</th>
+      <th style="width:100px">Budget ₹</th>
+      <th style="width:100px">Status</th>
+      <th style="min-width:200px">Notes / Remarks</th>
+      <th style="width:50px">Edit</th>
+    </tr></thead>
+    <tbody id="ov-body"></tbody>
+  </table></div>
+</div>
+
+<!-- TASK VIEW -->
+<div class="panel" id="panel-taskview">
+  <div id="tv-topbar">
+    <h2>📋 Task View</h2>
+    <div class="tv-sel-wrap">
+      <label>Select Activity</label>
+      <select id="tv-task-sel" onchange="renderTaskView()"></select>
+    </div>
+  </div>
+  <div id="tv-content">
+    <div style="text-align:center;padding:60px 0;color:var(--mid);font-size:14px">Select an activity above to see its full timeline</div>
+  </div>
+</div>
+
+<!-- BUDGET MANAGER -->
+<div class="panel" id="panel-budgetmgr">
+  <div class="bm-hero">
+    <h2>💼 Budget Manager</h2>
+    <div class="bm-mode">
+      <button class="bm-mode-btn active" id="bm-btn-month" onclick="switchBMMode('month')">📅 Month View</button>
+      <button class="bm-mode-btn" id="bm-btn-task" onclick="switchBMMode('task')">📋 Task View</button>
+    </div>
+    <div class="bm-ctrl">
+      <select class="bm-sel" id="bm-month-sel" onchange="renderBudgetMgr()" style="display:block"></select>
+      <select class="bm-sel" id="bm-task-sel" onchange="renderBudgetMgr()" style="display:none"></select>
+      <button class="redist-btn" id="bm-redist-btn" onclick="bmRedistribute()" style="display:none">⚖ Redistribute Budget</button>
+      <button class="btn-sm" style="background:rgba(255,195,82,.9);color:#1a1a1a;border:none;border-radius:8px;padding:8px 14px;font:700 12px var(--fn);cursor:pointer" onclick="autoAllocateAll()">⚡ Auto-Allocate</button>
+    </div>
+  </div>
+  <div class="bm-strip" id="bm-strip"></div>
+  <div class="bm-outcomes" id="bm-outcomes"></div>
+  <div class="bm-table-wrap"><table class="bm-table">
+    <thead><tr id="bm-thead"></tr></thead>
+    <tbody id="bm-body"></tbody>
+  </table></div>
+  <div style="margin-top:8px;font-size:11px;color:var(--mid)" id="bm-footer"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="panel" id="panel-settings">
+  <div id="settings-grid"></div>
+</div>
+
+</div><!-- #app -->
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-head">
+      <h2 id="modal-title">Activity</h2>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-tabs" class="crm-tabs hidden"></div>
+    <div id="modal-body"></div>
+    <div id="modal-foot">
+      <button class="btn-sm btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn-sm btn-pri" id="modal-save-btn" onclick="modalSave()">Save Changes</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<footer id="app-footer" class="hidden" style="text-align:center;padding:14px;font-size:11px;color:var(--mid);border-top:1px solid var(--bd);background:#fff;margin-top:20px">
+  Curiosity, crafted. · Project 800 · Designed and developed by <a href="https://www.zamstars.com" target="_blank" style="font-weight:700;background:var(--grad-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Zamstars</a>
+</footer>
+
+<footer id="app-footer" class="hidden" style="text-align:center;padding:14px;font-size:11px;color:var(--mid);border-top:1px solid var(--bd);background:#fff;margin-top:20px">
+  Curiosity, crafted. · Project 800 · Designed and developed by <a href="https://www.zamstars.com" target="_blank" style="font-weight:700;background:var(--grad-main);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Zamstars</a>
+</footer>
+</body>
+</html>
